@@ -1,5 +1,5 @@
 [package]
-name = "eso-addon-manifest"
+name = "eso_addon_manifest"
 version = "0.1.0"
 edition = "2021"
 description = "A simple ESO AddOn Manifest.txt file parser and validator written in Rust"
