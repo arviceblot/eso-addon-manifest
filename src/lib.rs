@@ -10,7 +10,7 @@
 //! // [...]
 //!
 //! let parser = AddonManifestParser::default();
-//! let result: AddonManifest = parser.parse("resources/test/AddonName.txt".to_string(), None).unwrap();
+//! let result: AddonManifest = parser.parse("resources/test/AddonName.txt", None).unwrap();
 //! assert_eq!("AddonName".to_string(), result.title);
 //! assert_eq!(101037, result.api_version);
 //! ```
@@ -122,7 +122,7 @@ impl Default for AddonManifestParser {
 
 impl AddonManifestParser {
     /// Parse a given file path into an AddonManifest result
-    pub fn parse(&self, path: String, full_validate: Option<bool>) -> Result<AddonManifest> {
+    pub fn parse(&self, path: &str, full_validate: Option<bool>) -> Result<AddonManifest> {
         let full_validate = full_validate.unwrap_or_default();
         let file = File::open(path).unwrap();
         let reader = BufReader::new(file);
@@ -287,7 +287,7 @@ impl AddonManifestParser {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
+    use std::{env, path::PathBuf, vec};
 
     use crate::{AddonManifest, AddonManifestParser, DependsEntry};
 
@@ -315,6 +315,23 @@ mod tests {
                     let mut result = AddonManifest::default();
                     for line in input.iter() {
                         parser.parse_line(line.to_string(), &mut result, false);
+                    }
+                    assert_eq!(expected, result);
+                }
+            )*
+        }
+    }
+
+    macro_rules! parse_lines_tests_validation {
+        ($($name:ident: $value:expr,)*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let (input, expected) = $value;
+                    let parser = AddonManifestParser::default();
+                    let mut result = AddonManifest::default();
+                    for line in input.iter() {
+                        parser.parse_line(line.to_string(), &mut result, true);
                     }
                     assert_eq!(expected, result);
                 }
@@ -404,6 +421,28 @@ mod tests {
                 ..Default::default()
             }
         ),
+        test_parse_line_single_api_version: (
+            vec!["## APIVersion: 101000"],
+            AddonManifest {
+                api_version: 101000,
+                ..Default::default()
+            }
+        ),
+        test_parse_other_lines: (
+            vec![
+                "## OptionalDependsOn: TheLib",
+                "## IsLibrary: true",
+                "## Credits: look mom, I finally did it"
+            ],
+            AddonManifest {
+                optional_depends_on: vec![DependsEntry {
+                    title: "TheLib".to_string(),
+                    version: None
+                }],
+                is_library: Some(true),
+                ..Default::default()
+            }
+        ),
         test_parse_lines: (
             vec![
                 "## Title: LibLibrary",
@@ -412,6 +451,10 @@ mod tests {
                 "## AddOnVersion: 27",
                 "## APIVersion: 101000 101001",
                 "## Author: TheAuthor",
+                "",
+                "; a comment",
+                "#another type of comment",
+                "some_script.lua",
             ],
             AddonManifest {
                 title: "LibLibrary".to_string(),
@@ -433,5 +476,27 @@ mod tests {
                 ..Default::default()
             }
         ),
+    }
+
+    parse_lines_tests_validation! {
+        test_title_length: (
+            vec!["## Title: This is a really long title, wow look how long it is. So great with many words. Who could forget such a beautiful title. It's like it never ends becuase it does not want to. It will consume the world."],
+            AddonManifest {
+                title: "This is a really long title, wow look how long it is. So great with many words. Who could forget such a beautiful title. It's like it never ends becuase it does not want to. It will consume the world.".to_string(),
+                ..Default::default()
+            }
+        ),
+    }
+
+    #[test]
+    fn test_parse_file() {
+        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let file_path: PathBuf = [dir.as_str(), "resources", "test", "AddonName.txt"]
+            .iter()
+            .collect();
+        let parser = AddonManifestParser::default();
+        let result = parser
+            .parse(file_path.to_str().unwrap(), Some(true))
+            .unwrap();
     }
 }
