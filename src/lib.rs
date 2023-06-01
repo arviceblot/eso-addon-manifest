@@ -10,15 +10,15 @@
 //! // [...]
 //!
 //! let parser = AddonManifestParser::default();
-//! let result: AddonManifest = parser.parse("some/file/path/AddonName.txt".to_string());
+//! let result: AddonManifest = parser.parse("resources/test/AddonName.txt".to_string(), None).unwrap();
 //! assert_eq!("AddonName".to_string(), result.title);
-//! assert_eq!(101037, result.addon_version);
+//! assert_eq!(101037, result.api_version);
 //! ```
 #![warn(
     missing_docs,
     rust_2018_idioms,
     missing_debug_implementations,
-    broken_intra_doc_links
+    rustdoc::broken_intra_doc_links
 )]
 mod error;
 
@@ -122,7 +122,7 @@ impl Default for AddonManifestParser {
 
 impl AddonManifestParser {
     /// Parse a given file path into an AddonManifest result
-    pub fn parse(&mut self, path: String, full_validate: Option<bool>) -> Result<AddonManifest> {
+    pub fn parse(&self, path: String, full_validate: Option<bool>) -> Result<AddonManifest> {
         let full_validate = full_validate.unwrap_or_default();
         let file = File::open(path).unwrap();
         let reader = BufReader::new(file);
