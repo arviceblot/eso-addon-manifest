@@ -4,6 +4,7 @@ version = "0.1.1"
 edition = "2021"
 description = "A simple ESO AddOn Manifest.txt file parser and validator written in Rust"
 license = "MIT"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
