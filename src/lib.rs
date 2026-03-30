@@ -32,13 +32,13 @@ use regex::Regex;
 
 static RE_DIRECTIVE: &str = r#"^## (?P<directive>.*): (?P<value>.*)"#;
 static RE_DEPENDS: &str = r#"^(?P<name>.+?)(([<=>]+)(?P<version>.*))?$"#;
+static RE_UNPRETTY: &str = r#"\|c\S{6}(?<text>[^\|]*)\|r"#;
 
 enum LineType {
     Directive,
     Comment,
     Blank,
     Data,
-    Unknown,
 }
 impl LineType {
     pub fn from_line(line: &str) -> Self {
@@ -110,12 +110,14 @@ impl PartialEq for AddonManifest {
 pub struct AddonManifestParser {
     re_directive: Regex,
     re_depend: Regex,
+    re_unpretty: Regex,
 }
 impl Default for AddonManifestParser {
     fn default() -> Self {
         Self {
             re_directive: Regex::new(RE_DIRECTIVE).unwrap(),
             re_depend: Regex::new(RE_DEPENDS).unwrap(),
+            re_unpretty: Regex::new(RE_UNPRETTY).unwrap(),
         }
     }
 }
@@ -197,7 +199,7 @@ impl AddonManifestParser {
                                         result.errors.push(ManifestError::TitleLength(char_len));
                                     }
                                 }
-                                result.title = value.to_string();
+                                result.title = self.re_unpretty.replace_all(value, "$text").to_string();
                             }
                             "Author" => {
                                 result.author = value.to_string();
@@ -254,7 +256,6 @@ impl AddonManifestParser {
             }
             LineType::Blank => {}
             LineType::Data => {}
-            LineType::Unknown => {}
         }
     }
 
@@ -408,6 +409,13 @@ mod tests {
             vec!["## Title: SomeTitle"],
             AddonManifest {
                 title: "SomeTitle".to_string(),
+                ..Default::default()
+            }
+        ),
+        test_parse_line_fomatted_title: (
+            vec!["## Title: |cEFEBBELibLibrary|r"],
+            AddonManifest {
+                title: "LibLibrary".to_string(),
                 ..Default::default()
             }
         ),
