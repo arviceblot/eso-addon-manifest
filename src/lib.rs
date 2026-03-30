@@ -199,7 +199,8 @@ impl AddonManifestParser {
                                         result.errors.push(ManifestError::TitleLength(char_len));
                                     }
                                 }
-                                result.title = self.re_unpretty.replace_all(value, "$text").to_string();
+                                result.title =
+                                    self.re_unpretty.replace_all(value, "$text").to_string();
                             }
                             "Author" => {
                                 result.author = value.to_string();
