@@ -504,7 +504,7 @@ mod tests {
             .iter()
             .collect();
         let parser = AddonManifestParser::default();
-        let result = parser
+        parser
             .parse(file_path.to_str().unwrap(), Some(true))
             .unwrap();
     }
