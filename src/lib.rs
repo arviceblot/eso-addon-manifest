@@ -22,10 +22,7 @@
 )]
 mod error;
 
-use std::{
-    fs::File,
-    io::Read,
-};
+use std::{fs::File, io::Read};
 
 use error::{ManifestError, Result};
 use regex::Regex;
@@ -180,13 +177,17 @@ impl AddonManifestParser {
                         // validate captures
                         let directive_cap = captures.name("directive");
                         if directive_cap.is_none() {
-                            result.errors.push(ManifestError::InvalidDirective(line.to_string()));
+                            result
+                                .errors
+                                .push(ManifestError::InvalidDirective(line.to_string()));
                             return;
                         }
                         let directive = directive_cap.unwrap().as_str();
                         let value_cap = captures.name("value");
                         if value_cap.is_none() {
-                            result.errors.push(ManifestError::InvalidDirective(line.to_string()));
+                            result
+                                .errors
+                                .push(ManifestError::InvalidDirective(line.to_string()));
                             return;
                         }
                         let value = value_cap.unwrap().as_str();
@@ -244,7 +245,9 @@ impl AddonManifestParser {
                     }
                     None => {
                         // matches directive line type but does not match regex
-                        result.errors.push(ManifestError::InvalidDirective(line.to_string()))
+                        result
+                            .errors
+                            .push(ManifestError::InvalidDirective(line.to_string()))
                     }
                 }
             }
