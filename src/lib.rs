@@ -24,7 +24,7 @@ mod error;
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader},
+    io::Read,
 };
 
 use error::{ManifestError, Result};
@@ -126,8 +126,7 @@ impl AddonManifestParser {
     /// Parse a given file path into an AddonManifest result
     pub fn parse(&self, path: &str, full_validate: Option<bool>) -> Result<AddonManifest> {
         let full_validate = full_validate.unwrap_or_default();
-        let file = File::open(path).unwrap();
-        let reader = BufReader::new(file);
+        let mut file = File::open(path).unwrap();
 
         let mut result = AddonManifest {
             title: "".to_string(),
@@ -136,8 +135,10 @@ impl AddonManifestParser {
             ..Default::default()
         };
 
-        for line in reader.lines() {
-            let line = line.map_err(ManifestError::ReadLineError).unwrap();
+        let mut buf = vec![];
+        let _ = file.read_to_end(&mut buf);
+        let contents = String::from_utf8_lossy(&buf);
+        for line in contents.lines() {
             self.parse_line(line, &mut result, full_validate);
         }
 
@@ -164,7 +165,7 @@ impl AddonManifestParser {
         Ok(result)
     }
 
-    fn parse_line(&self, line: String, result: &mut AddonManifest, full_validate: bool) {
+    fn parse_line(&self, line: &str, result: &mut AddonManifest, full_validate: bool) {
         // determine line type
         let line_type = LineType::from_line(&line);
         match line_type {
@@ -179,13 +180,13 @@ impl AddonManifestParser {
                         // validate captures
                         let directive_cap = captures.name("directive");
                         if directive_cap.is_none() {
-                            result.errors.push(ManifestError::InvalidDirective(line));
+                            result.errors.push(ManifestError::InvalidDirective(line.to_string()));
                             return;
                         }
                         let directive = directive_cap.unwrap().as_str();
                         let value_cap = captures.name("value");
                         if value_cap.is_none() {
-                            result.errors.push(ManifestError::InvalidDirective(line));
+                            result.errors.push(ManifestError::InvalidDirective(line.to_string()));
                             return;
                         }
                         let value = value_cap.unwrap().as_str();
@@ -243,7 +244,7 @@ impl AddonManifestParser {
                     }
                     None => {
                         // matches directive line type but does not match regex
-                        result.errors.push(ManifestError::InvalidDirective(line))
+                        result.errors.push(ManifestError::InvalidDirective(line.to_string()))
                     }
                 }
             }
@@ -316,7 +317,7 @@ mod tests {
                     let parser = AddonManifestParser::default();
                     let mut result = AddonManifest::default();
                     for line in input.iter() {
-                        parser.parse_line(line.to_string(), &mut result, false);
+                        parser.parse_line(line, &mut result, false);
                     }
                     assert_eq!(expected, result);
                 }
@@ -333,7 +334,7 @@ mod tests {
                     let parser = AddonManifestParser::default();
                     let mut result = AddonManifest::default();
                     for line in input.iter() {
-                        parser.parse_line(line.to_string(), &mut result, true);
+                        parser.parse_line(line, &mut result, true);
                     }
                     assert_eq!(expected, result);
                 }
