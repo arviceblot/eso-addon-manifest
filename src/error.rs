@@ -1,3 +1,5 @@
+use std::{num::ParseIntError, str::ParseBoolError};
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -22,6 +24,12 @@ pub enum ManifestError {
     ApiMinimumVersion(u32),
     #[error("error reading line")]
     ReadLineError(std::io::Error),
+    #[error("field parse error")]
+    ParseIntError(ParseIntError),
+    #[error("field parse error")]
+    ParseBoolError(ParseBoolError),
+    #[error("error reading file")]
+    FileIOError(std::io::Error),
     #[error("unknown manifest error")]
     Unknown,
 }

@@ -123,7 +123,7 @@ impl AddonManifestParser {
     /// Parse a given file path into an AddonManifest result
     pub fn parse(&self, path: &str, full_validate: Option<bool>) -> Result<AddonManifest> {
         let full_validate = full_validate.unwrap_or_default();
-        let mut file = File::open(path).unwrap();
+        let mut file = File::open(path).map_err(ManifestError::FileIOError)?;
 
         let mut result = AddonManifest {
             title: "".to_string(),
@@ -136,7 +136,12 @@ impl AddonManifestParser {
         let _ = file.read_to_end(&mut buf);
         let contents = String::from_utf8_lossy(&buf);
         for line in contents.lines() {
-            self.parse_line(line, &mut result, full_validate);
+            match self.parse_line(line, &mut result, full_validate) {
+                Ok(_) => {}
+                Err(error) => {
+                    result.errors.push(error);
+                }
+            }
         }
 
         if full_validate {
@@ -156,13 +161,15 @@ impl AddonManifestParser {
                     .push(ManifestError::ApiMinimumVersion(result.api_version))
             }
         }
-        if !result.errors.is_empty() {
-            // return Err(result);
-        }
         Ok(result)
     }
 
-    fn parse_line(&self, line: &str, result: &mut AddonManifest, full_validate: bool) {
+    fn parse_line(
+        &self,
+        line: &str,
+        result: &mut AddonManifest,
+        full_validate: bool,
+    ) -> Result<()> {
         // determine line type
         let line_type = LineType::from_line(&line);
         match line_type {
@@ -177,18 +184,12 @@ impl AddonManifestParser {
                         // validate captures
                         let directive_cap = captures.name("directive");
                         if directive_cap.is_none() {
-                            result
-                                .errors
-                                .push(ManifestError::InvalidDirective(line.to_string()));
-                            return;
+                            return Err(ManifestError::InvalidDirective(line.to_string()));
                         }
                         let directive = directive_cap.unwrap().as_str();
                         let value_cap = captures.name("value");
                         if value_cap.is_none() {
-                            result
-                                .errors
-                                .push(ManifestError::InvalidDirective(line.to_string()));
-                            return;
+                            return Err(ManifestError::InvalidDirective(line.to_string()));
                         }
                         let value = value_cap.unwrap().as_str();
 
@@ -210,30 +211,37 @@ impl AddonManifestParser {
                             "APIVersion" => {
                                 if value.contains(' ') {
                                     // we have to suppported version
-                                    let values: Vec<u32> =
-                                        value.split(' ').map(|x| x.parse().unwrap()).collect();
+                                    let values: Vec<u32> = value
+                                        .split(' ')
+                                        .map(|x| {
+                                            x.parse().map_err(ManifestError::ParseIntError).unwrap()
+                                        })
+                                        .collect();
                                     result.api_version = values[0];
                                     result.api_version_2 = Some(values[1]);
                                 } else {
-                                    result.api_version = value.parse().unwrap();
+                                    result.api_version =
+                                        value.parse().map_err(ManifestError::ParseIntError)?;
                                 }
                             }
                             "AddOnVersion" => {
-                                result.addon_version = Some(value.parse().unwrap());
+                                result.addon_version =
+                                    Some(value.parse().map_err(ManifestError::ParseIntError)?);
                             }
                             "Version" => {
                                 result.version = Some(value.to_string());
                             }
                             "DependsOn" => {
-                                let depends = self.parse_depends(value);
+                                let depends = self.parse_depends(value)?;
                                 result.depends_on.extend(depends);
                             }
                             "OptionalDependsOn" => {
-                                let depends = self.parse_depends(value);
+                                let depends = self.parse_depends(value)?;
                                 result.optional_depends_on.extend(depends);
                             }
                             "IsLibrary" => {
-                                result.is_library = Some(value.parse().unwrap());
+                                result.is_library =
+                                    Some(value.parse().map_err(ManifestError::ParseBoolError)?);
                             }
                             _ => {
                                 // unmatched directives are not necessarily an error, see: Credits, Contributors, etc.
@@ -261,10 +269,11 @@ impl AddonManifestParser {
             }
             LineType::Blank => {}
             LineType::Data => {}
-        }
+        };
+        Ok(())
     }
 
-    fn parse_depends(&self, line: &str) -> Vec<DependsEntry> {
+    fn parse_depends(&self, line: &str) -> Result<Vec<DependsEntry>> {
         let mut result = vec![];
         let values: Vec<&str> = line.split(' ').collect();
         for val in values.iter() {
@@ -277,7 +286,12 @@ impl AddonManifestParser {
                     // handle bad entry error
                 }
                 if let Some(version) = captures.name("version") {
-                    depends_entry.version = Some(version.as_str().parse().unwrap());
+                    depends_entry.version = Some(
+                        version
+                            .as_str()
+                            .parse()
+                            .map_err(ManifestError::ParseIntError)?,
+                    );
                 }
 
                 if !depends_entry.title.is_empty() {
@@ -287,7 +301,7 @@ impl AddonManifestParser {
                 // invalid depends entry
             }
         }
-        result
+        Ok(result)
     }
 }
 
@@ -304,7 +318,7 @@ mod tests {
                 fn $name() {
                     let (input, expected) = $value;
                     let parser = AddonManifestParser::default();
-                    let result = parser.parse_depends(input);
+                    let result = parser.parse_depends(input).unwrap();
                     assert_eq!(expected, result);
                 }
             )*
@@ -320,7 +334,7 @@ mod tests {
                     let parser = AddonManifestParser::default();
                     let mut result = AddonManifest::default();
                     for line in input.iter() {
-                        parser.parse_line(line, &mut result, false);
+                        parser.parse_line(line, &mut result, false).unwrap();
                     }
                     assert_eq!(expected, result);
                 }
@@ -337,7 +351,7 @@ mod tests {
                     let parser = AddonManifestParser::default();
                     let mut result = AddonManifest::default();
                     for line in input.iter() {
-                        parser.parse_line(line, &mut result, true);
+                        parser.parse_line(line, &mut result, true).unwrap();
                     }
                     assert_eq!(expected, result);
                 }
