@@ -171,10 +171,10 @@ impl AddonManifestParser {
         full_validate: bool,
     ) -> Result<()> {
         // determine line type
-        let line_type = LineType::from_line(&line);
+        let line_type = LineType::from_line(line);
         match line_type {
             LineType::Directive => {
-                let dir_captures = self.re_directive.captures(&line);
+                let dir_captures = self.re_directive.captures(line);
                 match dir_captures {
                     Some(captures) => {
                         if full_validate && line.len() > 301 {
