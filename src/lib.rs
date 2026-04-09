@@ -171,10 +171,10 @@ impl AddonManifestParser {
         full_validate: bool,
     ) -> Result<()> {
         // determine line type
-        let line_type = LineType::from_line(&line);
+        let line_type = LineType::from_line(line);
         match line_type {
             LineType::Directive => {
-                let dir_captures = self.re_directive.captures(&line);
+                let dir_captures = self.re_directive.captures(line);
                 match dir_captures {
                     Some(captures) => {
                         if full_validate && line.len() > 301 {
@@ -210,15 +210,13 @@ impl AddonManifestParser {
                             }
                             "APIVersion" => {
                                 if value.contains(' ') {
-                                    // we have to suppported version
-                                    let values: Vec<u32> = value
-                                        .split(' ')
-                                        .map(|x| {
-                                            x.parse().map_err(ManifestError::ParseIntError).unwrap()
-                                        })
-                                        .collect();
-                                    result.api_version = values[0];
-                                    result.api_version_2 = Some(values[1]);
+                                    // we have to supported version
+                                    let values: Vec<&str> = value.split(' ').collect();
+                                    result.api_version =
+                                        values[0].parse().map_err(ManifestError::ParseIntError)?;
+                                    result.api_version_2 = Some(
+                                        values[1].parse().map_err(ManifestError::ParseIntError)?,
+                                    );
                                 } else {
                                     result.api_version =
                                         value.parse().map_err(ManifestError::ParseIntError)?;
@@ -522,8 +520,9 @@ mod tests {
             .iter()
             .collect();
         let parser = AddonManifestParser::default();
-        parser
+        let manifest = parser
             .parse(file_path.to_str().unwrap(), Some(true))
             .unwrap();
+        assert_eq!(manifest.errors.len(), 1);
     }
 }
