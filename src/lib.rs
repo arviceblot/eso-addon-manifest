@@ -167,7 +167,7 @@ impl AddonManifestParser {
             }
             if result.author.trim().is_empty() {
                 result
-                    .errors
+                    .warnings
                     .push(ManifestError::MissingDirective("Author".to_string()));
             }
             if result.api_version < 100003 {
@@ -193,7 +193,7 @@ impl AddonManifestParser {
                 match dir_captures {
                     Some(captures) => {
                         if full_validate && line.len() > 301 {
-                            result.errors.push(ManifestError::LineLength(line.len()));
+                            result.warnings.push(ManifestError::LineLength(line.len()));
                         }
 
                         // validate captures
@@ -284,9 +284,10 @@ impl AddonManifestParser {
                         }
                     }
                     None => {
-                        // matches directive line type but does not match regex
+                        // matches directive line type but does not match regex;
+                        // the game ignores these, so we warn rather than error
                         result
-                            .errors
+                            .warnings
                             .push(ManifestError::InvalidDirective(line.to_string()))
                     }
                 }
@@ -638,6 +639,65 @@ mod tests {
         assert_eq!(
             result.warnings[0].to_string(),
             "unmapped directive: Credits"
+        );
+    }
+
+    #[test]
+    fn test_malformed_directive_is_warning() {
+        // Lines starting with "## " but without ": " are common in license
+        // boilerplate. The game ignores them, so we warn rather than error.
+        let parser = AddonManifestParser::default();
+        let mut result = AddonManifest::default();
+        parser
+            .parse_line(
+                "## This Add-on is not created by, affiliated with or sponsored by ZeniMax Media Inc. or its affiliates.",
+                &mut result,
+                true,
+            )
+            .unwrap();
+        // Should produce a warning, not an error.
+        assert!(result.errors.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].to_string().contains("invalid directive"));
+    }
+
+    #[test]
+    fn test_missing_author_is_warning() {
+        // Author is optional per the wiki; missing Author should be a warning.
+        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let file_path: PathBuf = [dir.as_str(), "resources", "test", "NoAuthorAddon.txt"]
+            .iter()
+            .collect();
+        let parser = AddonManifestParser::default();
+        let manifest = parser
+            .parse(file_path.to_str().unwrap(), Some(true))
+            .unwrap();
+        assert!(manifest.errors.is_empty());
+        assert!(
+            manifest
+                .warnings
+                .iter()
+                .any(|w| { w.to_string().contains("missing required directive: Author") })
+        );
+    }
+
+    #[test]
+    fn test_line_length_over_301_is_warning() {
+        let long_value: String = "A".repeat(310);
+        let long_line = format!("## DependsOn: {}", long_value);
+        assert!(long_line.len() > 301);
+
+        let parser = AddonManifestParser::default();
+        let mut result = AddonManifest::default();
+        parser.parse_line(&long_line, &mut result, true).unwrap();
+
+        // Line length should be a warning, not an error.
+        assert!(result.errors.is_empty());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| { w.to_string().contains("beyond 301 bytes") })
         );
     }
 
