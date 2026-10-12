@@ -85,8 +85,11 @@ jobs:
           CARGO_INCREMENTAL: '0'
           RUSTFLAGS: '-Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Cinstrument-coverage -Zpanic_abort_tests'
           RUSTDOCFLAGS: '-Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Cinstrument-coverage -Zpanic_abort_tests'
+          LLVM_PROFILE_FILE: 'eso_addon_manifest-%p-%m.profraw'
       - id: coverage  
         uses: actions-rs/grcov@v0.1
+        with:
+          llvm: true
       - name: Coveralls upload
         uses: coverallsapp/github-action@master
         with:
