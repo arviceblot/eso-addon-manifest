@@ -1,0 +1,4 @@
+## Title: AddonWithDescription
+## APIVersion: 101037
+## Author: arviceblot
+## Description: An addon that tests the description field parsing

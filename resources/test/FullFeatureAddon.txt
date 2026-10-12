@@ -1,0 +1,15 @@
+## Title: FullFeatureAddon
+## APIVersion: 101048
+## AddOnVersion: 5
+## Author: TestAuthor
+## Description: An addon that exercises all supported manifest directives
+## Version: 1.0.0
+## IsLibrary: false
+## DisableSavedVariablesAutoSaving: 1
+## DependsOn: LibAddonMenu-2.0>=41
+## OptionalDependsOn: Skyshards
+## PCDependsOn: LibCustomPC>=1
+## ConsoleDependsOn: LibCustomConsole>=2
+## SavedVariables: FullFeatureAddonSavedVars FullFeatureAddonSettings
+
+some_file.lua

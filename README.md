@@ -29,4 +29,24 @@ assert_eq!("AddonName".to_string(), result.title);
 assert_eq!(101037, result.api_version);
 ```
 
+## Supported Directives
+
+| Directive | Struct Field | Type |
+|---|---|---|
+| `Title:` | `title` | `String` |
+| `Author:` | `author` | `String` |
+| `APIVersion:` | `api_version`, `api_version_2` | `u32`, `Option<u32>` |
+| `AddOnVersion:` | `addon_version` | `Option<u32>` |
+| `Version:` | `version` | `Option<String>` |
+| `DependsOn:` | `depends_on` | `Vec<DependsEntry>` |
+| `OptionalDependsOn:` | `optional_depends_on` | `Vec<DependsEntry>` |
+| `PCDependsOn:` | `pc_depends_on` | `Vec<DependsEntry>` |
+| `ConsoleDependsOn:` | `console_depends_on` | `Vec<DependsEntry>` |
+| `Description:` | `description` | `Option<String>` |
+| `IsLibrary:` | `is_library` | `Option<bool>` |
+| `SavedVariables:` | `saved_variables` | `Vec<String>` |
+| `DisableSavedVariablesAutoSaving:` | `disable_saved_variables_auto_saving` | `Option<bool>` |
+
+Unrecognized directives produce a warning rather than an error, so non-standard directives like `Credits:` or `Contributors:` won't cause parsing to fail.
+
 License: MIT
