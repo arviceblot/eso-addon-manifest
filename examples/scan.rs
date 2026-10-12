@@ -25,7 +25,7 @@ fn find_manifests(dir: &str, depth: u32, max_depth: u32, results: &mut Vec<PathB
 fn main() {
     let dir = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "/home/arviceblot/git/eso-addons/test-addons".to_string());
+        .unwrap_or_else(|| ".".to_string());
 
     let parser = AddonManifestParser::default();
     let mut files = Vec::new();
