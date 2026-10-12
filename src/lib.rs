@@ -81,6 +81,16 @@ pub struct AddonManifest {
     pub depends_on: Vec<DependsEntry>,
     /// A name list similar to DependsOn: but the add-ons in this list will not prevent your add-on from running. Use this to assure other addons listed here are loaded before your addon (e.g. AddonName1 AddonName2).
     pub optional_depends_on: Vec<DependsEntry>,
+    /// PC-only dependencies; only effective in .addon manifests. Same format as DependsOn.
+    pub pc_depends_on: Vec<DependsEntry>,
+    /// Console-only dependencies; only effective in .addon manifests. Same format as DependsOn.
+    pub console_depends_on: Vec<DependsEntry>,
+    /// Space-separated list of names for data objects persisted to disk between UI loads
+    pub saved_variables: Vec<String>,
+    /// A short description of the add-on for human display (e.g. "A helpful addon for managing inventory")
+    pub description: Option<String>,
+    /// Set to true to disable the game's automatic saving of this addon's saved variables
+    pub disable_saved_variables_auto_saving: Option<bool>,
     /// false or not present : if this add-on is not a library or support add-on; true : if this add-on is a library or support add-on
     pub is_library: Option<bool>,
     /// Vec of errors produced during import or full validation
@@ -98,6 +108,11 @@ impl PartialEq for AddonManifest {
             && self.version == other.version
             && self.depends_on == other.depends_on
             && self.optional_depends_on == other.optional_depends_on
+            && self.pc_depends_on == other.pc_depends_on
+            && self.console_depends_on == other.console_depends_on
+            && self.saved_variables == other.saved_variables
+            && self.description == other.description
+            && self.disable_saved_variables_auto_saving == other.disable_saved_variables_auto_saving
             && self.is_library == other.is_library
     }
 }
@@ -152,7 +167,7 @@ impl AddonManifestParser {
             }
             if result.author.trim().is_empty() {
                 result
-                    .errors
+                    .warnings
                     .push(ManifestError::MissingDirective("Author".to_string()));
             }
             if result.api_version < 100003 {
@@ -178,7 +193,7 @@ impl AddonManifestParser {
                 match dir_captures {
                     Some(captures) => {
                         if full_validate && line.len() > 301 {
-                            result.errors.push(ManifestError::LineLength(line.len()));
+                            result.warnings.push(ManifestError::LineLength(line.len()));
                         }
 
                         // validate captures
@@ -237,6 +252,25 @@ impl AddonManifestParser {
                                 let depends = self.parse_depends(value)?;
                                 result.optional_depends_on.extend(depends);
                             }
+                            "PCDependsOn" => {
+                                let depends = self.parse_depends(value)?;
+                                result.pc_depends_on.extend(depends);
+                            }
+                            "ConsoleDependsOn" => {
+                                let depends = self.parse_depends(value)?;
+                                result.console_depends_on.extend(depends);
+                            }
+                            "SavedVariables" => {
+                                let vars: Vec<String> =
+                                    value.split_whitespace().map(String::from).collect();
+                                result.saved_variables.extend(vars);
+                            }
+                            "Description" => {
+                                result.description = Some(value.to_string());
+                            }
+                            "DisableSavedVariablesAutoSaving" => {
+                                result.disable_saved_variables_auto_saving = Some(value == "1");
+                            }
                             "IsLibrary" => {
                                 result.is_library =
                                     Some(value.parse().map_err(ManifestError::ParseBoolError)?);
@@ -245,14 +279,15 @@ impl AddonManifestParser {
                                 // unmatched directives are not necessarily an error, see: Credits, Contributors, etc.
                                 result
                                     .warnings
-                                    .push(ManifestError::UnmappedDirective(value.to_string()));
+                                    .push(ManifestError::UnmappedDirective(directive.to_string()));
                             }
                         }
                     }
                     None => {
-                        // matches directive line type but does not match regex
+                        // matches directive line type but does not match regex;
+                        // the game ignores these, so we warn rather than error
                         result
-                            .errors
+                            .warnings
                             .push(ManifestError::InvalidDirective(line.to_string()))
                     }
                 }
@@ -468,9 +503,68 @@ mod tests {
                 ..Default::default()
             }
         ),
+        test_parse_line_description: (
+            vec!["## Description: A helpful addon for managing inventory"],
+            AddonManifest {
+                description: Some("A helpful addon for managing inventory".to_string()),
+                ..Default::default()
+            }
+        ),
+        test_parse_line_description_empty: (
+            vec!["## Description: "],
+            AddonManifest {
+                description: Some("".to_string()),
+                ..Default::default()
+            }
+        ),
+        test_parse_line_pc_depends_on: (
+            vec!["## PCDependsOn: LibAddonMenu-2.0>=40"],
+            AddonManifest {
+                pc_depends_on: vec![DependsEntry {
+                    title: "LibAddonMenu-2.0".to_string(),
+                    version: Some(40),
+                }],
+                ..Default::default()
+            }
+        ),
+        test_parse_line_console_depends_on: (
+            vec!["## ConsoleDependsOn: LibHarvensAddonSettings>=20004"],
+            AddonManifest {
+                console_depends_on: vec![DependsEntry {
+                    title: "LibHarvensAddonSettings".to_string(),
+                    version: Some(20004),
+                }],
+                ..Default::default()
+            }
+        ),
+        test_parse_line_saved_variables: (
+            vec!["## SavedVariables: MyAddonSavedVars MyAddonSettings"],
+            AddonManifest {
+                saved_variables: vec![
+                    "MyAddonSavedVars".to_string(),
+                    "MyAddonSettings".to_string(),
+                ],
+                ..Default::default()
+            }
+        ),
+        test_parse_line_disable_saved_variables_auto_saving: (
+            vec!["## DisableSavedVariablesAutoSaving: 1"],
+            AddonManifest {
+                disable_saved_variables_auto_saving: Some(true),
+                ..Default::default()
+            }
+        ),
+        test_parse_line_disable_saved_variables_auto_saving_disabled: (
+            vec!["## DisableSavedVariablesAutoSaving: 0"],
+            AddonManifest {
+                disable_saved_variables_auto_saving: Some(false),
+                ..Default::default()
+            }
+        ),
         test_parse_lines: (
             vec![
                 "## Title: LibLibrary",
+                "## Description: A library for addon development",
                 "## DependsOn: CustomLib>=4 OtherLib",
                 "## Version: 1.20",
                 "## AddOnVersion: 27",
@@ -483,6 +577,7 @@ mod tests {
             ],
             AddonManifest {
                 title: "LibLibrary".to_string(),
+                description: Some("A library for addon development".to_string()),
                 depends_on: vec![
                     DependsEntry {
                         title: "CustomLib".to_string(),
@@ -511,6 +606,12 @@ mod tests {
                 ..Default::default()
             }
         ),
+        test_unmapped_directive_stores_name: (
+            vec!["## Credits: SomeAuthor"],
+            AddonManifest {
+                ..Default::default()
+            }
+        ),
     }
 
     #[test]
@@ -524,5 +625,159 @@ mod tests {
             .parse(file_path.to_str().unwrap(), Some(true))
             .unwrap();
         assert_eq!(manifest.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_unmapped_directive_warning_stores_name() {
+        let parser = AddonManifestParser::default();
+        let mut result = AddonManifest::default();
+        parser
+            .parse_line("## Credits: SomeAuthor", &mut result, true)
+            .unwrap();
+        assert_eq!(result.warnings.len(), 1);
+        // The warning should contain the directive NAME, not the value.
+        assert_eq!(
+            result.warnings[0].to_string(),
+            "unmapped directive: Credits"
+        );
+    }
+
+    #[test]
+    fn test_malformed_directive_is_warning() {
+        // Lines starting with "## " but without ": " are common in license
+        // boilerplate. The game ignores them, so we warn rather than error.
+        let parser = AddonManifestParser::default();
+        let mut result = AddonManifest::default();
+        parser
+            .parse_line(
+                "## This Add-on is not created by, affiliated with or sponsored by ZeniMax Media Inc. or its affiliates.",
+                &mut result,
+                true,
+            )
+            .unwrap();
+        // Should produce a warning, not an error.
+        assert!(result.errors.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].to_string().contains("invalid directive"));
+    }
+
+    #[test]
+    fn test_missing_author_is_warning() {
+        // Author is optional per the wiki; missing Author should be a warning.
+        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let file_path: PathBuf = [dir.as_str(), "resources", "test", "NoAuthorAddon.txt"]
+            .iter()
+            .collect();
+        let parser = AddonManifestParser::default();
+        let manifest = parser
+            .parse(file_path.to_str().unwrap(), Some(true))
+            .unwrap();
+        assert!(manifest.errors.is_empty());
+        assert!(
+            manifest
+                .warnings
+                .iter()
+                .any(|w| { w.to_string().contains("missing required directive: Author") })
+        );
+    }
+
+    #[test]
+    fn test_line_length_over_301_is_warning() {
+        let long_value: String = "A".repeat(310);
+        let long_line = format!("## DependsOn: {}", long_value);
+        assert!(long_line.len() > 301);
+
+        let parser = AddonManifestParser::default();
+        let mut result = AddonManifest::default();
+        parser.parse_line(&long_line, &mut result, true).unwrap();
+
+        // Line length should be a warning, not an error.
+        assert!(result.errors.is_empty());
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| { w.to_string().contains("beyond 301 bytes") })
+        );
+    }
+
+    #[test]
+    fn test_parse_file_with_description() {
+        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let file_path: PathBuf = [
+            dir.as_str(),
+            "resources",
+            "test",
+            "AddonWithDescription.txt",
+        ]
+        .iter()
+        .collect();
+        let parser = AddonManifestParser::default();
+        let manifest = parser
+            .parse(file_path.to_str().unwrap(), Some(true))
+            .unwrap();
+        assert_eq!(manifest.title, "AddonWithDescription");
+        assert_eq!(manifest.api_version, 101037);
+        assert_eq!(manifest.author, "arviceblot");
+        assert_eq!(
+            manifest.description,
+            Some("An addon that tests the description field parsing".to_string())
+        );
+        // No errors expected since all required fields are present and valid
+        assert!(manifest.errors.is_empty());
+    }
+
+    #[test]
+    fn test_parse_file_full_features() {
+        let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+        let file_path: PathBuf = [dir.as_str(), "resources", "test", "FullFeatureAddon.txt"]
+            .iter()
+            .collect();
+        let parser = AddonManifestParser::default();
+        let manifest = parser
+            .parse(file_path.to_str().unwrap(), Some(true))
+            .unwrap();
+
+        // Basic fields
+        assert_eq!(manifest.title, "FullFeatureAddon");
+        assert_eq!(manifest.api_version, 101048);
+        assert_eq!(manifest.addon_version, Some(5));
+        assert_eq!(manifest.author, "TestAuthor");
+        assert_eq!(manifest.version, Some("1.0.0".to_string()));
+        assert_eq!(manifest.is_library, Some(false));
+        assert_eq!(
+            manifest.description,
+            Some("An addon that exercises all supported manifest directives".to_string())
+        );
+
+        // DisableSavedVariablesAutoSaving
+        assert_eq!(manifest.disable_saved_variables_auto_saving, Some(true));
+
+        // DependsOn
+        assert_eq!(manifest.depends_on.len(), 1);
+        assert_eq!(manifest.depends_on[0].title, "LibAddonMenu-2.0");
+        assert_eq!(manifest.depends_on[0].version, Some(41));
+
+        // OptionalDependsOn
+        assert_eq!(manifest.optional_depends_on.len(), 1);
+        assert_eq!(manifest.optional_depends_on[0].title, "Skyshards");
+
+        // PCDependsOn
+        assert_eq!(manifest.pc_depends_on.len(), 1);
+        assert_eq!(manifest.pc_depends_on[0].title, "LibCustomPC");
+        assert_eq!(manifest.pc_depends_on[0].version, Some(1));
+
+        // ConsoleDependsOn
+        assert_eq!(manifest.console_depends_on.len(), 1);
+        assert_eq!(manifest.console_depends_on[0].title, "LibCustomConsole");
+        assert_eq!(manifest.console_depends_on[0].version, Some(2));
+
+        // SavedVariables
+        assert_eq!(manifest.saved_variables.len(), 2);
+        assert_eq!(manifest.saved_variables[0], "FullFeatureAddonSavedVars");
+        assert_eq!(manifest.saved_variables[1], "FullFeatureAddonSettings");
+
+        // No errors expected
+        assert!(manifest.errors.is_empty());
     }
 }
